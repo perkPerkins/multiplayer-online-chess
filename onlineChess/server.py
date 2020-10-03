@@ -3,10 +3,9 @@ from _thread import *
 from game import Game
 import pickle
 
-SERVER = ""
-PORT = 5000
-
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+SERVER = "10.0.0.133"
+PORT = 5000
 try:
     sock.bind((SERVER, PORT))
 except socket.error as e:

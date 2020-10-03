@@ -13,7 +13,7 @@ BOARD_WIDTH = 700
 SQUARE_WIDTH = 87
 BOARD_OFFSET = 75
 ROWS = 8
-screen = pygame.display.set_mode((WIDTH, WIDTH))
+screen = pygame.display.set_mode((WIDTH, WIDTH), pygame.RESIZABLE)
 pygame.display.set_caption("Cool chess game, dude")
 icon = pygame.image.load('white_pawn.png')
 pygame.display.set_icon(icon)
@@ -115,45 +115,58 @@ def load_piece_images():
     return images
 
 
-def draw_square(screen, square):
-    pygame.draw.line(screen, colors.RED, square, (square[0] + 87, square[1]), 5)
-    pygame.draw.line(screen, colors.RED, (square[0] + 87, square[1]), (square[0] + 87, square[1] + 87), 5)
-    pygame.draw.line(screen, colors.RED, (square[0] + 87, square[1] + 87), (square[0], square[1] + 87), 5)
-    pygame.draw.line(screen, colors.RED, (square[0], square[1] + 87), square, 5)
+# def draw_square(screen, square):
+#     pygame.draw.line(screen, colors.RED, square, (square[0] + 87, square[1]), 5)
+#     pygame.draw.line(screen, colors.RED, (square[0] + 87, square[1]), (square[0] + 87, square[1] + 87), 5)
+#     pygame.draw.line(screen, colors.RED, (square[0] + 87, square[1] + 87), (square[0], square[1] + 87), 5)
+#     pygame.draw.line(screen, colors.RED, (square[0], square[1] + 87), square, 5)
 
 
-def draw_screen(screen, grid, game, player, square):
+def draw_screen(screen, grid, game, player, opponent=""):
     screen.fill(colors.LIGHT_GREY)
 
     for row in grid:
         for node in row:
             node.draw(screen)
-    if square:
-        draw_square(screen, square)
+
     if not game.ready:
         prompt = Text("Waiting for opponent....", WIDTH / 2, 30, 30, colors.RED, colors.LIGHT_GREY)
         prompt.draw(screen)
+
     else:
-        if game.player_turn == player:
-            prompt = Text("Your turn", WIDTH / 2, 30, 30, colors.RED, colors.LIGHT_GREY)
+        if game.loser == -1:
+            if game.player_turn == player:
+                prompt = Text("Your move", WIDTH / 2, 30, 30, colors.RED, colors.LIGHT_GREY)
+            else:
+                if player == 0:
+                    opponent_name = game.player_two_name
+                else:
+                    opponent_name = game.player_one_name
+                prompt = Text(opponent_name + "'s move", WIDTH / 2, 30, 30, colors.RED, colors.LIGHT_GREY)
+        elif game.loser == 1:
+            if player == 0:
+                prompt = Text("You mated " + opponent + "!", WIDTH / 2, 30, 30, colors.RED, colors.LIGHT_GREY)
+            else:
+                prompt = Text("You've been mated :(  " + opponent + " wins!", WIDTH / 2, 30, 30, colors.RED, colors.LIGHT_GREY)
         else:
             if player == 0:
-                opponent_name = game.player_two_name
+                prompt = Text("You've been mated :(    " + opponent + " wins!", WIDTH / 2, 30, 30, colors.RED, colors.LIGHT_GREY)
             else:
-                opponent_name = game.player_one_name
-            prompt = Text(opponent_name + "'s Turn ", WIDTH / 2, 30, 30, colors.RED, colors.LIGHT_GREY)
+                prompt = Text("You mated " + opponent + "!", WIDTH / 2, 30, 30, colors.RED, colors.LIGHT_GREY)
+
         prompt.draw(screen)
-    pygame.display.update()
+
+    pygame.display.flip()
 
 
 def is_within_bounds(x, y):
     return 0 <= x <= 7 and 0 <= y <= 7
 
 
-def generate_move(player_name, piece_position, row, col, checkmate=False):
-    if checkmate:
+def generate_move(player_name, piece_position, row, col, mate=False):
+    if mate:
         return player_name + ",mate"
-    return player_name + "," + str(piece_position[0]) + "," + str(piece_position[1]) + "," + str(row) + "," + str(col)
+    return player_name + "," + str(piece_position[0]) + "," + str(7 - piece_position[1]) + "," + str(row) + "," + str(7 - col)
 
 
     # LOS = Line Of Site (king's line of site)
@@ -385,40 +398,110 @@ def is_in_check(king_pos, board, player_color, save_king=False):
 
 def opponent_castle(board, old_pos, new_pos):
     if board.board[new_pos[0]][new_pos[1]].piece.type == "king" and abs(old_pos[0] - new_pos[0]) == 2:
+        pygame.mixer.music.load("castle.wav")
+        pygame.mixer.music.play()
         if new_pos[0] == 6:
             board.board[new_pos[0] - 1][new_pos[1]].piece = board.board[new_pos[0] + 1][new_pos[1]].piece
             board.board[new_pos[0] + 1][new_pos[1]].piece = None
         else:
             board.board[new_pos[0] + 1][new_pos[1]].piece = board.board[new_pos[0] - 2][new_pos[1]].piece
             board.board[new_pos[0] - 2][new_pos[1]].piece = None
+        return True
+    return False
 
 
-def opponent_queen(board, new_pos, piece_list):
+def opponent_queen(board, new_pos, piece_list, player):
     if board.board[new_pos[0]][new_pos[1]].piece.type == "pawn" and (new_pos[1] == 0 or new_pos[1] == 7):
-        if new_pos[1] == 7:
+        if player == 0:
             board.board[new_pos[0]][new_pos[1]].piece = Piece(piece_list[10], "queen", "black")
         else:
             board.board[new_pos[0]][new_pos[1]].piece = Piece(piece_list[4], "queen", "white")
 
 
-def update_opponent_move(player, opponent_move, board, game, piece_list):
+def remove_move_markers(board, move):
+    if move:
+        if board.board[move[0][0]][move[0][1]].color == colors.GREEN_SELECTED:
+            board.board[move[0][0]][move[0][1]].color = colors.SEA_GREEN
+        else:
+            board.board[move[0][0]][move[0][1]].color = colors.IVORY
+
+        if board.board[move[1][0]][move[1][1]].color == colors.GREEN_SELECTED:
+            board.board[move[1][0]][move[1][1]].color = colors.SEA_GREEN
+        else:
+            board.board[move[1][0]][move[1][1]].color = colors.IVORY
+
+
+def add_move_markers(board, move):
+
+    if board.board[move[0][0]][move[0][1]].color == colors.SEA_GREEN:
+        board.board[move[0][0]][move[0][1]].color = colors.GREEN_SELECTED
+    else:
+        board.board[move[0][0]][move[0][1]].color = colors.WHITE_SELECTED
+
+    if board.board[move[1][0]][move[1][1]].color == colors.SEA_GREEN:
+        board.board[move[1][0]][move[1][1]].color = colors.GREEN_SELECTED
+    else:
+        board.board[move[1][0]][move[1][1]].color = colors.WHITE_SELECTED
+
+
+def add_single_move_marker(board, move):
+    if board.board[move[0]][move[1]].color == colors.SEA_GREEN:
+        board.board[move[0]][move[1]].color = colors.GREEN_SELECTED
+    elif board.board[move[0]][move[1]].color == colors.IVORY:
+        board.board[move[0]][move[1]].color = colors.WHITE_SELECTED
+
+
+def remove_single_move_marker(board, move):
+    if board.board[move[0]][move[1]].color == colors.GREEN_SELECTED:
+        board.board[move[0]][move[1]].color = colors.SEA_GREEN
+    elif board.board[move[0]][move[1]].color == colors.WHITE_SELECTED:
+        board.board[move[0]][move[1]].color = colors.IVORY
+
+
+def update_opponent_move(player, opponent_move, board, game, piece_list, prev_move):
     if player == 0:
         if opponent_move != game.player_two_move:
             old_pos = (int(game.player_two_move[0]), int(game.player_two_move[1]))
             new_pos = (int(game.player_two_move[2]), int(game.player_two_move[3]))
+            new_square = board.board[new_pos[0]][new_pos[1]].piece
             board.board[new_pos[0]][new_pos[1]].piece = board.board[old_pos[0]][old_pos[1]].piece
             board.board[old_pos[0]][old_pos[1]].piece = None
-            opponent_castle(board, old_pos, new_pos)
-            opponent_queen(board, new_pos, piece_list)
+            if opponent_castle(board, old_pos, new_pos):
+                pygame.mixer.music.load("castle.wav")
+                pygame.mixer.music.play()
+            elif new_square:
+                pygame.mixer.music.load("piece_take.wav")
+                pygame.mixer.music.play()
+            else:
+                pygame.mixer.music.load("piece_move_empty.wav")
+                pygame.mixer.music.play()
+
+            opponent_queen(board, new_pos, piece_list, player)
+            remove_move_markers(board, prev_move)
+            add_move_markers(board, (old_pos, new_pos))
+
             return game.player_two_move
     else:
         if opponent_move != game.player_one_move:
             old_pos = (int(game.player_one_move[0]), int(game.player_one_move[1]))
             new_pos = (int(game.player_one_move[2]), int(game.player_one_move[3]))
+            new_square = board.board[new_pos[0]][new_pos[1]].piece
             board.board[new_pos[0]][new_pos[1]].piece = board.board[old_pos[0]][old_pos[1]].piece
             board.board[old_pos[0]][old_pos[1]].piece = None
-            opponent_castle(board, old_pos, new_pos)
-            opponent_queen(board, new_pos, piece_list)
+            if opponent_castle(board, old_pos, new_pos):
+                pygame.mixer.music.load("castle.wav")
+                pygame.mixer.music.play()
+            elif new_square:
+                pygame.mixer.music.load("piece_take.wav")
+                pygame.mixer.music.play()
+            else:
+                pygame.mixer.music.load("piece_move_empty.wav")
+                pygame.mixer.music.play()
+
+            opponent_queen(board, new_pos, piece_list, player)
+            remove_move_markers(board, prev_move)
+            add_move_markers(board, (old_pos, new_pos))
+
             return game.player_one_move
     return opponent_move
 
@@ -444,6 +527,7 @@ def castle(board, piece_pos, row, column, king_pos, player_color):
 
     board.board[row][column].piece.has_moved = True
     return False, (row, column)
+
 
 # Yes this is messy as hell, but its the only way to do it while also keeping the computations as efficient as possible.
 # Checkmate detection could be accomplished much more cleanly by keeping a list of all squares threatened by all pieces
@@ -659,14 +743,13 @@ def can_save_king(board, king_pos, threat_piece, player_color):
         return False, None, None
 
 
-def checkmate(game, opponent, screen, player):
-    if game.loser is player:
-        prompt = Text("You've been mated :(    " + opponent + " wins!", WIDTH / 2, 30, 30, colors.RED, colors.LIGHT_GREY)
+def checkmate(game, player):
+    if game.loser == player:
+        pygame.mixer.music.load("lose_sound.wav")
+        pygame.mixer.music.play()
     else:
-        prompt = Text("You mated " + opponent + "!", WIDTH / 2, 30, 30, colors.RED, colors.LIGHT_GREY)
-
-    prompt.draw(screen)
-    pygame.display.update()
+        pygame.mixer.music.load("win_sound.wav")
+        pygame.mixer.music.play()
 
     # play again button
 
@@ -674,47 +757,61 @@ def checkmate(game, opponent, screen, player):
 def update_board(board, piece_pos, row, column, king_pos, player_color, piece_list):
     piece = board.board[piece_pos[0]][piece_pos[1]].piece
     if piece.type == "king" and abs(piece_pos[0] - row) == 2:
+        pygame.mixer.music.load("castle.wav")
+        pygame.mixer.music.play()
         return castle(board, piece_pos, row, column, king_pos, player_color)
 
     board.board[piece_pos[0]][piece_pos[1]].piece = None
+    old_piece = board.board[row][column].piece
     board.board[row][column].piece = piece
     temp_king_pos = (row, column) if board.board[row][column].piece.type == "king" else king_pos
     in_check, _ = is_in_check(temp_king_pos, board.board, player_color)
     # if king still in check after move, the move is invalid
     if in_check:
         piece = board.board[row][column].piece
-        board.board[row][column].piece = None
+        board.board[row][column].piece = old_piece
         board.board[piece_pos[0]][piece_pos[1]].piece = piece
     else:
-        if piece.type == "pawn" and (column == 7 or column == 0):
-            if column == 7:
-                board.board[row][column].piece = Piece(piece_list[10], "queen", "black")
-            else:
+        if old_piece:
+            pygame.mixer.music.load("piece_take.wav")
+            pygame.mixer.music.play()
+        else:
+            pygame.mixer.music.load("piece_move_empty.wav")
+            pygame.mixer.music.play()
+        if piece.type == "pawn" and column == 0:
+            if player_color == "white":
                 board.board[row][column].piece = Piece(piece_list[4], "queen", "white")
+            else:
+                board.board[row][column].piece = Piece(piece_list[10], "queen", "black")
         king_pos = temp_king_pos
         board.board[row][column].piece.has_moved = True
     return in_check, king_pos
 
 
 def main():
+    pygame.init()
     run = True
     piece_selected = False
     in_check = False
     piece_pos = ()
-    pygame.init()
+
     center = screen.get_rect().center
     name_button = Button("Choose Name", center[0] - 200, center[1] - 200, 400, 200, 40)
     play_now_button = Button("Play Now", center[0] - 200, center[1] + 50, 400, 200, 40, colors.GREEN, colors.LIGHT_GREEN)
     player_name = home_screen(name_button, play_now_button)
 
-    board = Board()
-    board.board, piece_list = initializer.initialize_board(board.board, load_piece_images())
     n = Network()
     player = int(n.player_number)
+    board = Board(player)
+    board.board, piece_list = initializer.initialize_board(board.board, load_piece_images(), player)
+    game = None
+
+    player = int(n.player_number)
     player_color = "white" if player == 0 else "black"
-    king_position = (4, 7) if player_color == "white" else (4, 0)
+    king_position = (4, 7)
+    prev_move = ()
     opponent_move = ""
-    square = None
+    opponent_resigned = False
     print("You are player: ", player)
 
     while run:
@@ -723,22 +820,32 @@ def main():
             game = n.send(message)
             if game.loser != -1:
                 if player == 0:
-                    checkmate(game, game.player_two_name, screen, player)
+                    checkmate(game, player)
                 else:
-                    checkmate(game, game.player_one_name, screen, player)
+                    checkmate(game, player)
+                break
         except:
-            run = False
             print("couldn't get game")
+            pygame.mixer.music.load("win_sound.wav")
+            pygame.mixer.music.play()
+            screen.fill(colors.LIGHT_GREY)
+            for row in board.board:
+                for node in row:
+                    node.draw(screen)
+            prompt = Text("Opponent resigned!", WIDTH / 2, 30, 30, colors.RED, colors.LIGHT_GREY)
+            prompt.draw(screen)
+            pygame.display.flip()
+            opponent_resigned = True
             break
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                run = False
-                pygame.quit()
+        if game.loser == -1:
+            opponent_move = update_opponent_move(player, opponent_move, board, game, piece_list, prev_move)
+            draw_screen(screen, board.board, game, player)
+
             if game.player_turn == player and game.ready:
-                opponent_move = update_opponent_move(player, opponent_move, board, game, piece_list)
                 in_check, threat_piece = is_in_check(king_position, board.board, player_color)
                 if in_check:
+                    print("check")
                     if king_is_trapped(king_position, board.board, player_color):
                         can_be_saved, savior, block = can_save_king(board.board, king_position, threat_piece, player_color)
                         if can_be_saved:
@@ -747,49 +854,77 @@ def main():
                             in_check, _ = is_in_check(king_position, board.board, player_color)
                             if in_check:
                                 print("CHECKMATE")
+                                game = n.send(generate_move(player_name, piece_pos, -1, -1, True))
                                 if player == 0:
-                                    checkmate(game, game.player_two_name, screen, player)
+                                    checkmate(game, player)
                                 else:
-                                    checkmate(game, game.player_one_name, screen, player)
-                                n.send(generate_move(player_name, piece_pos, -1, -1, True))
+                                    checkmate(game, player)
+                                break
 
                             board.board[savior[0]][savior[1]].piece = board.board[block[0]][block[1]].piece
                             board.board[block[0]][block[1]].piece = None
                         else:
                             print("CHECKMATE")
+                            game = n.send(generate_move(player_name, piece_pos, -1, -1, True))
                             if player == 0:
-                                checkmate(game, game.player_two_name, screen, player)
+                                checkmate(game, player)
                             else:
-                                checkmate(game, game.player_one_name, screen, player)
-                            n.send(generate_move(player_name, piece_pos, -1, -1, True))
+                                checkmate(game, player)
+                            break
 
                     else:
                         print("NOT CHECKMATE")
 
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    pos = pygame.mouse.get_pos()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+                pygame.quit()
 
-                    if not piece_selected:
-                        row = (pos[0] - BOARD_OFFSET) // (BOARD_WIDTH // 8)
-                        column = (pos[1] - BOARD_OFFSET) // (BOARD_WIDTH // 8)
-                        if is_within_bounds(row, column):
-                            if board.board[row][column].piece:
-                                if board.board[row][column].piece.color == player_color:
-                                    square = (BOARD_OFFSET + (SQUARE_WIDTH * row), (BOARD_OFFSET + (SQUARE_WIDTH * column)))
-                                    piece_pos = (row, column)
-                                    piece_selected = True
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                pos = pygame.mouse.get_pos()
+
+                if not piece_selected:
+                    row = (pos[0] - BOARD_OFFSET) // (BOARD_WIDTH // 8)
+                    column = (pos[1] - BOARD_OFFSET) // (BOARD_WIDTH // 8)
+                    if is_within_bounds(row, column):
+                        if board.board[row][column].piece:
+                            if board.board[row][column].piece.color == player_color:
+                                add_single_move_marker(board, (row, column))
+                                piece_pos = (row, column)
+                                piece_selected = True
+                else:
+                    row = (pos[0] - BOARD_OFFSET) // (BOARD_WIDTH // 8)
+                    column = (pos[1] - BOARD_OFFSET) // (BOARD_WIDTH // 8)
+
+                    if board.is_valid_move(piece_pos[0], piece_pos[1], row, column, player_color):
+                        in_check, king_position = update_board(board, piece_pos, row, column, king_position, player_color, piece_list)
+                        if not in_check:
+
+                            add_single_move_marker(board, (row, column))
+                            if opponent_move:
+                                remove_move_markers(board, ((int(opponent_move[0]), int(opponent_move[1])), (int(opponent_move[2]), int(opponent_move[3]))))
+
+                            prev_move = (piece_pos, (row, column))
+                            n.send(generate_move(player_name, piece_pos, row, column))
+
+                        else:
+                            remove_single_move_marker(board, (piece_pos[0], piece_pos[1]))
                     else:
-                        row = (pos[0] - BOARD_OFFSET) // (BOARD_WIDTH // 8)
-                        column = (pos[1] - BOARD_OFFSET) // (BOARD_WIDTH // 8)
+                        remove_single_move_marker(board, (piece_pos[0], piece_pos[1]))
 
-                        if board.is_valid_move(piece_pos[0], piece_pos[1], row, column, player_color):
-                            in_check, king_position = update_board(board, piece_pos, row, column, king_position, player_color, piece_list)
-                            if not in_check:
-                                n.send(generate_move(player_name, piece_pos, row, column))
-                        square = None
-                        piece_selected = False
+                    piece_selected = False
 
-        draw_screen(screen, board.board, game, player, square)
+    while run:
+        if not opponent_resigned:
+            if game.loser == 0:
+                draw_screen(screen, board.board, game, player, game.player_two_name)
+            else:
+                draw_screen(screen, board.board, game, player, game.player_one_name)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+                pygame.quit()
 
 
 main()

@@ -24,10 +24,10 @@ class Node:
 
 
 class Board:
-    def __init__(self):
-        self.board = self.make_grid()
+    def __init__(self, player):
+        self.board = self.make_grid(player)
 
-    def make_grid(self):
+    def make_grid(self, player):
         grid = []
         gap = WIDTH // ROWS
         for y in range(ROWS):
@@ -35,14 +35,26 @@ class Board:
             for x in range(ROWS):
                 if y % 2 == 0:
                     if x % 2 == 0:
-                        grid[y].append(Node(y, x, gap, (240, 255, 240)))  # white
+                        if player == 0:
+                            grid[y].append(Node(y, x, gap, colors.IVORY))  # white
+                        else:
+                            grid[y].append(Node(y, x, gap, colors.SEA_GREEN))  # green
                     else:
-                        grid[y].append(Node(y, x, gap, (46, 139, 87)))  # green
+                        if player == 0:
+                            grid[y].append(Node(y, x, gap, colors.SEA_GREEN))
+                        else:
+                            grid[y].append(Node(y, x, gap, colors.IVORY))
                 else:
                     if x % 2 == 0:
-                        grid[y].append(Node(y, x, gap, (46, 139, 87)))
+                        if player == 0:
+                            grid[y].append(Node(y, x, gap, colors.SEA_GREEN))
+                        else:
+                            grid[y].append(Node(y, x, gap, colors.IVORY))
                     else:
-                        grid[y].append(Node(y, x, gap, (240, 255, 240)))
+                        if player == 0:
+                            grid[y].append(Node(y, x, gap, colors.IVORY))
+                        else:
+                            grid[y].append(Node(y, x, gap, colors.SEA_GREEN))
         return grid
 
     def is_within_bounds(self, x, y):
@@ -72,28 +84,19 @@ class Board:
                 return self.is_valid_king_move(old_row, old_col, new_row, new_col, player_color)
         return False
 
-    def is_moving_backwards(self, old_col, new_col, player_color):
-        if player_color == "black":
-            return new_col < old_col
-        return new_col > old_col
-
     def is_valid_pawn__move(self, old_row, old_col, new_row, new_col, player_color):
-        if abs(old_row - new_row) == 0 and abs(old_col - new_col) == 2 and \
+        if old_row - new_row == 0 and old_col - new_col == 2 and \
                 not self.board[old_row][old_col].piece.has_moved and not self.board[new_row][new_col].piece:
-            if player_color == "black":
-                if self.board[old_row][old_col + 1].piece:
-                    return False
-            else:
-                if self.board[old_row][old_col - 1].piece:
-                    return False
+            if self.board[old_row][old_col - 1].piece:
+                return False
             return True
 
-        elif abs(old_row - new_row) == 0 and abs(old_col - new_col) == 1 and not self.board[new_row][new_col].piece and \
-                not self.is_moving_backwards(old_col, new_col, player_color):
+        elif old_row - new_row == 0 and old_col - new_col == 1 and not self.board[new_row][new_col].piece and \
+                new_col < old_col:
             return True
 
-        elif abs(old_col - new_col) == 1 and abs(old_row - new_row) == 1 and self.board[new_row][new_col].piece and \
-                not self.is_moving_backwards(old_col, new_col, player_color):
+        elif old_col - new_col == 1 and abs(old_row - new_row) == 1 and self.board[new_row][new_col].piece and \
+                new_col < old_col:
             if self.board[new_row][new_col].piece.color != player_color:
                 return True
         return False
@@ -115,7 +118,7 @@ class Board:
             if not self.board[new_row][new_col].piece:
                 return True
             elif self.board[new_row][new_col].piece.color != player_color:
-                    return True
+                return True
         return False
 
     def is_valid_knight_move(self, old_row, old_col, new_row, new_col, player_color):
@@ -191,4 +194,3 @@ class Board:
     def is_valid_queen_move(self, old_row, old_col, new_row, new_col, player_color):
         return self.is_valid_bishop_move(old_row, old_col, new_row, new_col, player_color) or \
             self.is_valid_rook_move(old_row, old_col, new_row, new_col, player_color)
-
